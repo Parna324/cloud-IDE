@@ -73,32 +73,31 @@ app.post("/execute", async (req, res) => {
 
     await container.start();
 
-    const stream = await container.logs({
+    const result = await container.wait();
+
+    const logs = await container.logs({
       stdout: true,
       stderr: true,
-      follow: true,
     });
 
-    let output = "";
+    const output = logs.toString();
 
-    stream.on("data", (chunk) => {
-      output += chunk.toString();
-    });
+    console.log("Container Result:", result);
+    console.log("Logs:", output);
+    await fs.remove(tempDir);
 
-    stream.on("end", async () => {
-      await fs.remove(tempDir);
-
-      res.json({
-        success: true,
-        output,
-      });
+    res.json({
+      success: true,
+      output,
     });
   } catch (error) {
+
+    console.log(error);
+  
     res.status(500).json({
       error: error.message,
     });
   }
-});
 
 app.listen(5002, () => {
   console.log("Execution engine running on port 5002");
