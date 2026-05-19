@@ -1,0 +1,523 @@
+Cloud IDE Platform — Starter Codebase
+    
+
+
+This is the starter implementation for your Cloud IDE platform.
+    
+
+
+    
+    
+    
+
+
+1. PROJECT STRUCTURE
+    
+
+
+cloud-ide-platform/│├── apps/│   └── frontend/│├── services/│   ├── auth-service/│   ├── gateway/│   └── execution-engine/│├── docker/├── scripts/├── infrastructure/│├── docker-compose.yml├── .env└── .env.example
+    
+
+
+    
+    
+    
+
+
+2. ROOT .env FILE
+    
+
+
+Create .env
+    
+
+
+NODE_ENV=developmentJWT_SECRET=supersecretkeyPOSTGRES_USER=postgresPOSTGRES_PASSWORD=passwordPOSTGRES_DB=cloudideREDIS_HOST=redisEXECUTION_TIMEOUT=10000
+    
+
+
+    
+    
+    
+
+
+3. DOCKER COMPOSE
+    
+
+
+Create docker-compose.yml
+    
+
+
+version: &quot;3.9&quot;services:  postgres:    image: postgres:15    container_name: cloudide-postgres    restart: always    environment:      POSTGRES_USER: postgres      POSTGRES_PASSWORD: password      POSTGRES_DB: cloudide    ports:      - &quot;5432:5432&quot;  redis:    image: redis:7    container_name: cloudide-redis    ports:      - &quot;6379:6379&quot;  gateway:    build: ./services/gateway    ports:      - &quot;5000:5000&quot;    volumes:      - ./services/gateway:/app  auth-service:    build: ./services/auth-service    ports:      - &quot;5001:5001&quot;    volumes:      - ./services/auth-service:/app  execution-engine:    build: ./services/execution-engine    ports:      - &quot;5002:5002&quot;    volumes:      - ./services/execution-engine:/app
+    
+
+
+    
+    
+    
+
+
+4. AUTH SERVICE
+    
+
+
+    
+    
+    
+
+
+Create Service
+    
+
+
+cd servicesmkdir auth-servicecd auth-servicenpm init -y
+    
+
+
+    
+    
+    
+
+
+Install Packages
+    
+
+
+npm install express bcryptjs jsonwebtoken cors dotenvnpm install -D nodemon
+    
+
+
+    
+    
+    
+
+
+Folder Structure
+    
+
+
+auth-service/│├── src/│   ├── controllers/│   ├── routes/│   ├── middleware/│   └── index.js│├── Dockerfile├── package.json└── .env
+    
+
+
+    
+    
+    
+
+
+src/index.js
+    
+
+
+require(&quot;dotenv&quot;).config();const express = require(&quot;express&quot;);const cors = require(&quot;cors&quot;);const bcrypt = require(&quot;bcryptjs&quot;);const jwt = require(&quot;jsonwebtoken&quot;);const app = express();app.use(cors());app.use(express.json());const users = [];app.get(&quot;/&quot;, (req, res) =&gt; {  res.json({ message: &quot;Auth Service Running&quot; });});app.post(&quot;/register&quot;, async (req, res) =&gt; {  try {    const { email, password } = req.body;    const hashedPassword = await bcrypt.hash(password, 10);    users.push({      email,      password: hashedPassword,    });    res.json({      success: true,      message: &quot;User registered&quot;,    });  } catch (error) {    res.status(500).json({ error: error.message });  }});app.post(&quot;/login&quot;, async (req, res) =&gt; {  try {    const { email, password } = req.body;    const user = users.find((u) =&gt; u.email === email);    if (!user) {      return res.status(404).json({        message: &quot;User not found&quot;,      });    }    const validPassword = await bcrypt.compare(      password,      user.password    );    if (!validPassword) {      return res.status(400).json({        message: &quot;Invalid password&quot;,      });    }    const token = jwt.sign(      { email },      process.env.JWT_SECRET,      {        expiresIn: &quot;1d&quot;,      }    );    res.json({      success: true,      token,    });  } catch (error) {    res.status(500).json({ error: error.message });  }});app.listen(5001, () =&gt; {  console.log(&quot;Auth service running on port 5001&quot;);});
+    
+
+
+    
+    
+    
+
+
+Dockerfile
+    
+
+
+FROM node:18-alpineWORKDIR /appCOPY package*.json ./RUN npm installCOPY . .EXPOSE 5001CMD [&quot;npm&quot;, &quot;run&quot;, &quot;dev&quot;]
+    
+
+
+    
+    
+    
+
+
+package.json Scripts
+    
+
+
+Add inside package.json
+    
+
+
+&quot;scripts&quot;: {  &quot;dev&quot;: &quot;nodemon src/index.js&quot;}
+    
+
+
+    
+    
+    
+
+
+5. API GATEWAY
+    
+
+
+    
+    
+    
+
+
+Create Service
+    
+
+
+cd servicesmkdir gatewaycd gatewaynpm init -y
+    
+
+
+    
+    
+    
+
+
+Install Packages
+    
+
+
+npm install express cors http-proxy-middlewarenpm install -D nodemon
+    
+
+
+    
+    
+    
+
+
+src/index.js
+    
+
+
+const express = require(&quot;express&quot;);const cors = require(&quot;cors&quot;);const { createProxyMiddleware } = require(&quot;http-proxy-middleware&quot;);const app = express();app.use(cors());app.use(  &quot;/api/auth&quot;,  createProxyMiddleware({    target: &quot;http://auth-service:5001&quot;,    changeOrigin: true,    pathRewrite: {      &quot;^/api/auth&quot;: &quot;&quot;,    },  }));app.get(&quot;/&quot;, (req, res) =&gt; {  res.json({ message: &quot;Gateway Running&quot; });});app.listen(5000, () =&gt; {  console.log(&quot;Gateway running on port 5000&quot;);});
+    
+
+
+    
+    
+    
+
+
+Gateway Dockerfile
+    
+
+
+FROM node:18-alpineWORKDIR /appCOPY package*.json ./RUN npm installCOPY . .EXPOSE 5000CMD [&quot;npm&quot;, &quot;run&quot;, &quot;dev&quot;]
+    
+
+
+    
+    
+    
+
+
+package.json Scripts
+    
+
+
+&quot;scripts&quot;: {  &quot;dev&quot;: &quot;nodemon src/index.js&quot;}
+    
+
+
+    
+    
+    
+
+
+6. EXECUTION ENGINE
+    
+
+
+This is the core service.
+    
+
+
+    
+    
+    
+
+
+Create Service
+    
+
+
+cd servicesmkdir execution-enginecd execution-enginenpm init -y
+    
+
+
+    
+    
+    
+
+
+Install Packages
+    
+
+
+npm install express cors uuid fs-extranpm install -D nodemon
+    
+
+
+    
+    
+    
+
+
+Folder Structure
+    
+
+
+execution-engine/│├── temp/├── src/│   └── index.js│├── Dockerfile└── package.json
+    
+
+
+    
+    
+    
+
+
+src/index.js
+    
+
+
+const express = require(&quot;express&quot;);const cors = require(&quot;cors&quot;);const fs = require(&quot;fs-extra&quot;);const path = require(&quot;path&quot;);const { exec } = require(&quot;child_process&quot;);const { v4: uuid } = require(&quot;uuid&quot;);const app = express();app.use(cors());app.use(express.json());const TEMP_DIR = path.join(__dirname, &quot;../temp&quot;);fs.ensureDirSync(TEMP_DIR);app.get(&quot;/&quot;, (req, res) =&gt; {  res.json({    message: &quot;Execution Engine Running&quot;,  });});app.post(&quot;/execute&quot;, async (req, res) =&gt; {  try {    const { code } = req.body;    const jobId = uuid();    const filePath = path.join(TEMP_DIR, `${jobId}.py`);    await fs.writeFile(filePath, code);    exec(      `python ${filePath}`,      {        timeout: 5000,      },      async (error, stdout, stderr) =&gt; {        await fs.remove(filePath);        if (error) {          return res.json({            success: false,            error: stderr,          });        }        res.json({          success: true,          output: stdout,        });      }    );  } catch (error) {    res.status(500).json({      error: error.message,    });  }});app.listen(5002, () =&gt; {  console.log(&quot;Execution engine running on port 5002&quot;);});
+    
+
+
+    
+    
+    
+
+
+Execution Dockerfile
+    
+
+
+FROM node:18-alpineRUN apk add --no-cache python3WORKDIR /appCOPY package*.json ./RUN npm installCOPY . .EXPOSE 5002CMD [&quot;npm&quot;, &quot;run&quot;, &quot;dev&quot;]
+    
+
+
+    
+    
+    
+
+
+package.json Scripts
+    
+
+
+&quot;scripts&quot;: {  &quot;dev&quot;: &quot;nodemon src/index.js&quot;}
+    
+
+
+    
+    
+    
+
+
+7. REACT FRONTEND
+    
+
+
+    
+    
+    
+
+
+Create App
+    
+
+
+cd appsnpm create vite@latest frontend
+    
+
+
+Select:
+    
+
+
+ReactJavaScript
+    
+
+
+    
+    
+    
+
+
+Install Packages
+    
+
+
+cd frontendnpm installnpm install axios react-router-dom @monaco-editor/react
+    
+
+
+    
+    
+    
+
+
+src/App.jsx
+    
+
+
+import { useState } from &quot;react&quot;;import axios from &quot;axios&quot;;import Editor from &quot;@monaco-editor/react&quot;;function App() {  const [code, setCode] = useState(&quot;print(&#39;Hello World&#39;)&quot;);  const [output, setOutput] = useState(&quot;&quot;);  const runCode = async () =&gt; {    try {      const response = await axios.post(        &quot;http://localhost:5002/execute&quot;,        {          code,        }      );      setOutput(response.data.output || response.data.error);    } catch (error) {      console.log(error);    }  };  return (    &lt;div style={{ padding: &quot;20px&quot; }}&gt;      &lt;h1&gt;Cloud IDE&lt;/h1&gt;      &lt;Editor        height=&quot;400px&quot;        defaultLanguage=&quot;python&quot;        value={code}        onChange={(value) =&gt; setCode(value)}      /&gt;      &lt;button        onClick={runCode}        style={{          marginTop: &quot;20px&quot;,          padding: &quot;10px 20px&quot;,        }}      &gt;        Run Code      &lt;/button&gt;      &lt;pre        style={{          marginTop: &quot;20px&quot;,          background: &quot;#111&quot;,          color: &quot;#0f0&quot;,          padding: &quot;20px&quot;,        }}      &gt;        {output}      &lt;/pre&gt;    &lt;/div&gt;  );}export default App;
+    
+
+
+    
+    
+    
+
+
+8. RUN THE PROJECT
+    
+
+
+    
+    
+    
+
+
+Start Docker Services
+    
+
+
+docker compose up --build
+    
+
+
+    
+    
+    
+
+
+Run Frontend
+    
+
+
+cd apps/frontendnpm run dev
+    
+
+
+    
+    
+    
+
+
+Frontend URL
+    
+
+
+http://localhost:5173
+    
+
+
+    
+    
+    
+
+
+Backend URLs
+    
+
+
+Gateway:http://localhost:5000Auth Service:http://localhost:5001Execution Engine:http://localhost:5002
+    
+
+
+    
+    
+    
+
+
+9. NEXT FEATURES TO BUILD
+    
+
+
+After this starter works:
+    
+
+
+JWT authentication
+    
+
+
+PostgreSQL database
+    
+
+
+Save code history
+    
+
+
+Multi-language execution
+    
+
+
+Docker isolation
+    
+
+
+WebSocket terminal
+    
+
+
+File explorer
+    
+
+
+AI code review
+    
+
+
+Kubernetes deployment
+    
+
+
+GitHub Actions CI/CD
+    
+
+
+    
+    
+    
+
+
+10. IMPORTANT SECURITY NOTE
+    
+
+
+Current execution engine is NOT secure.
+    
+
+
+Later you MUST:
+    
+
+
+run code inside isolated Docker containers
+    
+
+
+disable networking
+    
+
+
+add memory limits
+    
+
+
+add CPU limits
+    
+
+
+add timeout protection
+    
+
+
+sandbox execution
+    
+
+
+Production cloud IDEs rely heavily on container isolation.

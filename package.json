@@ -1,5 +1,9 @@
 {
   "dependencies": {
-    "dockerode": "^5.0.0"
+    "bullmq": "^5.76.8",
+    "dockerode": "^5.0.0",
+    "ioredis": "^5.10.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
   }
 }

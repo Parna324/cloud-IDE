@@ -11,30 +11,58 @@ services:
       POSTGRES_DB: cloudide
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7
     container_name: cloudide-redis
+    restart: always
     ports:
       - "6379:6379"
 
   gateway:
     build: ./services/gateway
+    restart: always
     ports:
       - "5000:5000"
     volumes:
       - ./services/gateway:/app
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:5001
+      EXECUTION_ENGINE_URL: http://execution-engine:5002
+    depends_on:
+      - auth-service
+      - execution-engine
 
   auth-service:
     build: ./services/auth-service
+    restart: always
     ports:
       - "5001:5001"
     volumes:
       - ./services/auth-service:/app
+      - auth_service_node_modules:/app/node_modules
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgres://postgres:password@postgres:5432/cloudide
+      JWT_SECRET: supersecretkey
+    depends_on:
+      - postgres
 
   execution-engine:
     build: ./services/execution-engine
-    ports:
-      - "5002:5002"
+    restart: always
     volumes:
       - ./services/execution-engine:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PORT: 5002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+  auth_service_node_modules:
