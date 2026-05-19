@@ -19,17 +19,27 @@ spec:
             - containerPort: 5432
           env:
             - name: POSTGRES_USER
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-ide-secrets
+                  key: postgres-user
             - name: POSTGRES_PASSWORD
-              value: password
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-ide-secrets
+                  key: postgres-password
             - name: POSTGRES_DB
-              value: cloudide
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-ide-secrets
+                  key: postgres-db
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
       volumes:
         - name: postgres-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: postgres-data
 ---
 apiVersion: v1
 kind: Service
@@ -41,3 +51,14 @@ spec:
   ports:
     - port: 5432
       targetPort: 5432
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

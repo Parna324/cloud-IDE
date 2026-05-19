@@ -19,7 +19,15 @@ spec:
             - containerPort: 5001
           env:
             - name: DATABASE_URL
-              value: postgres://postgres:password@postgres:5432/cloudide
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-ide-secrets
+                  key: database-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-ide-secrets
+                  key: jwt-secret
 ---
 apiVersion: v1
 kind: Service
