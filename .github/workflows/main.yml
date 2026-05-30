@@ -1,0 +1,175 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NODE_VERSION: 20
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: cloud-ide
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  validate:
+    name: Validate application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            apps/frontend/package-lock.json
+            services/auth-service/package-lock.json
+            services/execution-engine/package-lock.json
+            services/gateway/package-lock.json
+
+      - name: Validate frontend
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Validate auth service
+        working-directory: services/auth-service
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cloudide
+        run: |
+          npm ci
+          npx prisma generate
+          node --check src/index.js
+
+      - name: Validate gateway service
+        working-directory: services/gateway
+        run: |
+          npm ci
+          node --check src/index.js
+
+      - name: Validate execution engine
+        working-directory: services/execution-engine
+        run: |
+          npm ci
+          node --check src/index.js
+          node --check src/socket.js
+
+  docker-build:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build application images
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+
+          PUSH_FLAG="--load"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            PUSH_FLAG="--push"
+          fi
+
+          build_image() {
+            local image_name="$1"
+            local context_path="$2"
+            shift 2
+
+            docker buildx build \
+              ${PUSH_FLAG} \
+              -t "${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}/${image_name}:${IMAGE_TAG}" \
+              "$@" \
+              "${context_path}"
+          }
+
+          build_image frontend apps/frontend --build-arg VITE_API_BASE_URL=/api
+          build_image gateway services/gateway
+          build_image auth-service services/auth-service
+          build_image execution-engine services/execution-engine
+          build_image runner-python services/execution-engine/docker/python
+          build_image runner-javascript services/execution-engine/docker/javascript
+          build_image runner-cpp services/execution-engine/docker/cpp
+          build_image runner-java services/execution-engine/docker/java
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${KUBE_CONFIG_DATA:-}" ]; then
+            echo "KUBE_CONFIG_DATA is not set; skipping deployment."
+            exit 0
+          fi
+
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+
+      - name: Apply Kubernetes manifests
+        shell: bash
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+
+          if [ -z "${KUBE_CONFIG_DATA:-}" ]; then
+            echo "KUBE_CONFIG_DATA is not set; skipping deployment."
+            exit 0
+          fi
+
+          kubectl apply -f k8s/
+
+          kubectl set image deployment/frontend frontend="${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}/frontend:${IMAGE_TAG}"
+          kubectl set image deployment/gateway gateway="${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}/gateway:${IMAGE_TAG}"
+          kubectl set image deployment/auth-service auth-service="${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}/auth-service:${IMAGE_TAG}"
+          kubectl set image deployment/execution-engine execution-engine="${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}/execution-engine:${IMAGE_TAG}"
+
+          kubectl set env deployment/execution-engine \
+            RUNNER_IMAGE_PREFIX="${REGISTRY}/${OWNER}/${IMAGE_NAMESPACE}" \
+            RUNNER_IMAGE_TAG="${IMAGE_TAG}"
