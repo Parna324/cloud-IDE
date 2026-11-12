@@ -59,7 +59,7 @@ docker-compose.yml              Local full-stack Compose setup
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.19+ for the current frontend toolchain
 - Docker Desktop or Docker Engine
 - Docker Compose
 - PostgreSQL and Redis if running services outside Docker
@@ -163,6 +163,16 @@ curl -X POST http://localhost:5000/api/code/execute \
 ```
 
 ## Deployment
+
+### AWS EC2 demo
+
+The current AWS demo runs on Amazon EC2 with Docker Compose. The CloudShell deployment script uploads a project ZIP to Amazon S3 and creates the host and network access rules with CloudFormation. Package the repository at the archive root, excluding `.env`, `.git`, `node_modules`, and generated build folders, upload the ZIP to CloudShell, then run:
+
+```bash
+bash deploy/aws/deploy.sh ~/cloud-ide-deploy.zip
+```
+
+When prompted, enter the client public IPv4 address with `/32`. The script prints the application URL and AWS resource identifiers. The demo currently uses a `t3.micro` instance in `ap-southeast-2`; this small instance is intended for demonstration and may be resource constrained. The AWS deployment walkthrough is in [docs/Cloud_IDE_DevOps_Presentation.docx](docs/Cloud_IDE_DevOps_Presentation.docx).
 
 ### CI/CD
 
