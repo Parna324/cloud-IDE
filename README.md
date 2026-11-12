@@ -15,12 +15,12 @@ A browser-based coding workspace with authentication, project/file storage, and 
 
 ## Tech Stack
 
-| Area | Technology |
-| --- | --- |
-| Frontend | React, Vite, Tailwind CSS, Monaco Editor |
-| Gateway | Node.js, Express, http-proxy-middleware |
-| Auth API | Node.js, Express, Prisma, PostgreSQL, JWT |
-| Execution | Node.js, Dockerode, Docker runner images |
+| Area           | Technology                                    |
+| -------------- | --------------------------------------------- |
+| Frontend       | React, Vite, Tailwind CSS, Monaco Editor      |
+| Gateway        | Node.js, Express, http-proxy-middleware       |
+| Auth API       | Node.js, Express, Prisma, PostgreSQL, JWT     |
+| Execution      | Node.js, Dockerode, Docker runner images      |
 | Infrastructure | Docker Compose, Kubernetes, Redis, PostgreSQL |
 
 ## Architecture
@@ -76,15 +76,15 @@ cp .env.example .env
 
 Important variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `JWT_SECRET` | Secret used to sign auth tokens |
-| `DATABASE_URL` | PostgreSQL connection string for Prisma |
-| `POSTGRES_USER` | Local Postgres username |
-| `POSTGRES_PASSWORD` | Local Postgres password |
-| `POSTGRES_DB` | Local Postgres database |
-| `REDIS_HOST` | Redis host used by execution services |
-| `VITE_API_BASE_URL` | Frontend API base URL |
+| Variable            | Purpose                                 |
+| ------------------- | --------------------------------------- |
+| `JWT_SECRET`        | Secret used to sign auth tokens         |
+| `DATABASE_URL`      | PostgreSQL connection string for Prisma |
+| `POSTGRES_USER`     | Local Postgres username                 |
+| `POSTGRES_PASSWORD` | Local Postgres password                 |
+| `POSTGRES_DB`       | Local Postgres database                 |
+| `REDIS_HOST`        | Redis host used by execution services   |
+| `VITE_API_BASE_URL` | Frontend API base URL                   |
 
 ## Local Development
 
@@ -139,20 +139,20 @@ The frontend container proxies `/api` requests to the gateway service.
 
 Gateway routes:
 
-| Route | Target |
-| --- | --- |
-| `/api/auth/*` | Auth service |
+| Route         | Target           |
+| ------------- | ---------------- |
+| `/api/auth/*` | Auth service     |
 | `/api/code/*` | Execution engine |
 
 Core endpoints:
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/api/auth/register` | Create a user |
-| `POST` | `/api/auth/login` | Login and receive JWT |
-| `GET` | `/api/auth/projects` | List user projects |
-| `POST` | `/api/auth/projects` | Create project |
-| `POST` | `/api/code/execute` | Execute submitted code |
+| Method | Path                 | Description            |
+| ------ | -------------------- | ---------------------- |
+| `POST` | `/api/auth/register` | Create a user          |
+| `POST` | `/api/auth/login`    | Login and receive JWT  |
+| `GET`  | `/api/auth/projects` | List user projects     |
+| `POST` | `/api/auth/projects` | Create project         |
+| `POST` | `/api/code/execute`  | Execute submitted code |
 
 Example execution request:
 
@@ -163,6 +163,21 @@ curl -X POST http://localhost:5000/api/code/execute \
 ```
 
 ## Deployment
+
+### CI/CD
+
+This repository now includes a GitHub Actions workflow at [/.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml) and a Jenkins pipeline at [/Jenkinsfile](Jenkinsfile).
+
+Both pipelines:
+
+- validate the frontend and backend services
+- build the Docker images for the app and runner containers
+- push images to GHCR on `main`
+- deploy to Kubernetes when a kubeconfig is available
+
+The execution engine can resolve runner images from `RUNNER_IMAGE_PREFIX` and `RUNNER_IMAGE_TAG`. That is what makes registry-based deployment work instead of relying on local Docker image names.
+
+For GitHub Actions deployment, provide `KUBE_CONFIG_DATA` as a base64-encoded kubeconfig secret. If you use a private registry, make sure the cluster has image pull credentials for the published GHCR packages.
 
 ### Docker Compose Deployment
 
@@ -196,6 +211,7 @@ The `k8s/` folder contains baseline manifests for Postgres, Redis, gateway, auth
 Before applying them:
 
 - Push application images to a registry and replace `cloud-ide-*` image names.
+- Set `RUNNER_IMAGE_PREFIX` and `RUNNER_IMAGE_TAG` for the execution engine so it can pull runner images from the same registry.
 - Store `JWT_SECRET`, `DATABASE_URL`, and database credentials in Kubernetes Secrets.
 - Use a PersistentVolumeClaim for PostgreSQL instead of ephemeral storage in production.
 - Provide Docker access to the execution engine, or replace Dockerode execution with a Kubernetes Job-based runner model.

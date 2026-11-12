@@ -1,21 +1,38 @@
+function resolveRunnerImage(serviceName, fallbackImage) {
+  const imagePrefix = process.env.RUNNER_IMAGE_PREFIX;
+  const imageTag = process.env.RUNNER_IMAGE_TAG;
+
+  if (!imagePrefix) {
+    return fallbackImage;
+  }
+
+  const baseImage = `${imagePrefix}/${serviceName}`;
+
+  if (!imageTag) {
+    return baseImage;
+  }
+
+  return `${baseImage}:${imageTag}`;
+}
+
 module.exports = {
   python: {
-    image: "cloud-ide-python",
+    image: resolveRunnerImage("python", "cloud-ide-python"),
     filename: "code.py",
   },
 
   javascript: {
-    image: "cloud-ide-node",
+    image: resolveRunnerImage("javascript", "cloud-ide-node"),
     filename: "code.js",
   },
 
   cpp: {
-    image: "cloud-ide-cpp",
+    image: resolveRunnerImage("cpp", "cloud-ide-cpp"),
     filename: "code.cpp",
   },
 
   java: {
-    image: "cloud-ide-java",
+    image: resolveRunnerImage("java", "cloud-ide-java"),
     filename: "Main.java",
   },
 };

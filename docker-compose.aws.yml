@@ -1,0 +1,81 @@
+services:
+  frontend:
+    build:
+      context: ./apps/frontend
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway
+
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cloudide}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-cloudide}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+
+  gateway:
+    build: ./services/gateway
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:5001
+      EXECUTION_ENGINE_URL: http://execution-engine:5002
+    depends_on:
+      - auth-service
+      - execution-engine
+
+  auth-service:
+    build: ./services/auth-service
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cloudide}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cloudide}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run dev"]
+    depends_on:
+      - postgres
+
+  execution-engine:
+    build: ./services/execution-engine
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PORT: 5002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - redis
+
+  runner-python:
+    image: cloud-ide-python
+    build: ./services/execution-engine/docker/python
+    profiles: [runner-build]
+
+  runner-javascript:
+    image: cloud-ide-node
+    build: ./services/execution-engine/docker/javascript
+    profiles: [runner-build]
+
+  runner-cpp:
+    image: cloud-ide-cpp
+    build: ./services/execution-engine/docker/cpp
+    profiles: [runner-build]
+
+  runner-java:
+    image: cloud-ide-java
+    build: ./services/execution-engine/docker/java
+    profiles: [runner-build]
+
+volumes:
+  postgres_data:

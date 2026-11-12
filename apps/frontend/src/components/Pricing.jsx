@@ -43,7 +43,7 @@ function Pricing() {
       return;
     }
 
-    window.location.href = "mailto:hello@cloudide.local";
+    window.location.assign("mailto:hello@cloudide.local");
   };
 
   return (

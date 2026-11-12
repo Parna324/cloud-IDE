@@ -53,7 +53,7 @@ function Dashboard() {
     };
 
     loadProjects();
-  }, [token]);
+  }, [apiBase, token]);
 
   const handleCreateProject = async () => {
     if (!projectName.trim()) {
